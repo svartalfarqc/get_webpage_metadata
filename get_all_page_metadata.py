@@ -8,7 +8,7 @@ import math
 from bs4 import BeautifulSoup
 
 
-def get_all_page_metas(page, config, debug=False):
+def get_all_page_metas(response, config, debug=False):
     '''
     Retrieve metadata from a web page according to specific configuration.
     Expected values:
@@ -27,18 +27,20 @@ def get_all_page_metas(page, config, debug=False):
 
     '''
 
+    metas = {}
+    title = ""
+
     try:
-        # This is needed to act as an actual browser, otherwise some sites will not return anything
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-
-        response = requests.get(page, headers=headers)
-        metas = {}
-
         if debug: print(page)
 
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Title
+            title_selector = config.get('title_selector')
+
+            if title_selector:
+                title = soup.select(title_selector)[0].text
 
             # Word count in description
             description_selector = config.get('description_selector')
@@ -52,7 +54,7 @@ def get_all_page_metas(page, config, debug=False):
                     for p in block_description:
                         clean_description = clean_description + p.text
                 else:
-                    clean_description = str(block_description)
+                    clean_description = str(block_description[0].text)
 
                 char_count = len(clean_description)
                 word_count = len(clean_description.split(" "))
@@ -98,14 +100,20 @@ def get_all_page_metas(page, config, debug=False):
             else:
                 print('error: missing attribute meta_selector')
 
-            # Final dictionary - build as needed
             metas.update({'char_count': char_count,
-                          'word_count': word_count})
-            return metas
+                          'word_count': word_count,
+                          'description': clean_description,
+                          'title': title})
         else:
+
             if debug:
-                print("statuscode not 200: " + str(response.status_code))
-                return
+                print("status code not 200: " + str(response.status_code))
+
+            metas.update({'title': "N/A"})
+
+        metas.update({'status_code': response.status_code})
+
+        return metas
 
     except Exception as e:
         print(e)
@@ -115,9 +123,10 @@ def get_all_page_metas(page, config, debug=False):
 # PUBLIC TEST CASE 1 (description doesn't work)
 page = 'https://www.metal-archives.com/bands/Trollfest/20648'
 config = {
-    'value_in_element' : 'sibling'
-    ,'meta_selector' : 'div#band_stats dl dt'
-    ,'description_selector': 'div#readMoreDialog.ui-widget-content'
-}
+        'value_in_element': 'sibling'
+        , 'meta_selector': 'div#band_stats dl dt'
+        , 'description_selector': 'div.band_comment'
+        , 'title_selector': 'h1.band_name'
+    }
 
 print(get_all_page_metas(page, config, debug = False))
